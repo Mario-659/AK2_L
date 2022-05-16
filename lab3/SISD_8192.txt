@@ -1,0 +1,7 @@
+Typ obliczen: SISD
+Liczba liczb: 8192
+Sredni czas: [s]:
++ 0.0013869
+- 0.0013821
+* 0.001367
+/ 0.0013983
