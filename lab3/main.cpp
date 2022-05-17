@@ -1,49 +1,63 @@
 #include <iostream>
+#include <time.h>
+#include <string>
 #include <fstream>
 
-#include <time.h>
-#include <unistd.h>
-#include <ostream>
-#include <string>
-#include <random>
-
-#define VECTOR_SIZE 8192
-#define NR_OF_MEASURES 10
+#define SIZE 2048
+#define REPS 10
 
 using namespace std;
-
-struct Vector {
+ 
+struct Vector{
     float a, b, c, d;
 };
 
-struct Vector Arr1[VECTOR_SIZE];
-struct Vector Arr2[VECTOR_SIZE];
+// Arrays with vectors
+Vector Arr1[SIZE];
+Vector Arr2[SIZE];
 
+// Array with results
+Vector Results[SIZE];
+
+time_t start, stop;
 double avgTimeAdd = 0;
 double avgTimeSub = 0;
 double avgTimeMul = 0;
 double avgTimeDiv = 0;
 
-struct Vector addResults[VECTOR_SIZE];
-struct Vector subResults[VECTOR_SIZE];
-struct Vector mulResults[VECTOR_SIZE];
-struct Vector divResults[VECTOR_SIZE];
+// Fills arrays with random values
+void fillRandom();
 
-random_device rd;
-mt19937 generator(rd());
-uniform_real_distribution<> dis(-1000.0, 1000.0);
+// SISD and SIMD operations, return clocks
+double add_SIMD(int i);
+double sub_SIMD(int i);
+double mul_SIMD(int i);
+double div_SIMD(int i);
+double add_SISD(int i);
+double sub_SISD(int i);
+double mul_SISD(int i);
+double div_SISD(int i);
 
-void logResults(const string type);
-void fillArr();
-
+// test operations and store average time to double avgTime...
 void testSIMD();
 void testSISD();
 
+// calculate time in [s] based on clocks and REPS, store it in time
+void storeTime(double clocks, double& time);
+
+// logs current value of avgTime to console and file
+void logResults(const string type);
+
+// returns vector as a string
+string toString(Vector vector);
+
+// returns number of clocks from start to stop
+double getClocks(time_t start, time_t stop);
+
 int main() {
-    // init pseudo-random number generator with current time 
-    // and fill Arr1 and Arr2 with random values
+    // seed with current time
     srand(time(NULL));
-    fillArr();
+    fillRandom();
 
     testSIMD();
     logResults("SIMD");
@@ -52,138 +66,349 @@ int main() {
     logResults("SISD");
 }
 
-float getRand() { return dis(generator); }
-
-void fillArr() {
-    for (int i=0; i<VECTOR_SIZE; i++) {
-        Arr1[i].a = getRand();
-        Arr1[i].b = getRand();
-        Arr1[i].c = getRand();
-        Arr1[i].d = getRand();
-        Arr2[i].a = getRand();
-        Arr2[i].b = getRand();
-        Arr2[i].c = getRand();
-        Arr2[i].d = getRand();
-    }
-}
-
-void addSIMD(int i);
-void subSIMD(int i);
-void mulSIMD(int i);
-void divSIMD(int i);
-
 void testSIMD() {
-    time_t start, end;
-    double sumTime = 0;
+    double sumClocks = 0;
+    for (int i=0; i<REPS; i++) {
+        for(int j=0; j<SIZE; j++) {
+            sumClocks += add_SIMD(j);
+        }
+    }
+    storeTime(sumClocks, avgTimeAdd);
 
-    for (int i=0; i<NR_OF_MEASURES; i++) {
-        for (int j=0; j<VECTOR_SIZE; j++) {
-            start = clock();
-            addSIMD(j);
-            end = clock();
-            sumTime += double(end - start);
+    sumClocks = 0;
+    for (int i=0; i<REPS; i++) {
+        for(int j=0; j<SIZE; j++) {
+            sumClocks += sub_SIMD(j);
         }
     }
-    avgTimeAdd = sumTime / double(NR_OF_MEASURES);
-    avgTimeAdd /= double(CLOCKS_PER_SEC);
-    
-    sumTime = 0;
-    for (int i=0; i<NR_OF_MEASURES; i++) {
-        for (int j=0; j<VECTOR_SIZE; j++) {
-            start = clock();
-            subSIMD(j);
-            end = clock();
-            sumTime += double(end - start);
-        }
-    }
-    avgTimeSub = sumTime / double(NR_OF_MEASURES);
-    avgTimeSub /= double(CLOCKS_PER_SEC);
+    storeTime(sumClocks, avgTimeSub);
 
-    sumTime = 0;
-    for (int i=0; i<NR_OF_MEASURES; i++) {
-        for (int j=0; j<VECTOR_SIZE; j++) {
-            start = clock();
-            mulSIMD(j);
-            end = clock();
-            sumTime += double(end - start);
+    sumClocks = 0;
+    for (int i=0; i<REPS; i++) {
+        for(int j=0; j<SIZE; j++) {
+            sumClocks += mul_SIMD(j);
         }
     }
-    avgTimeMul = sumTime / double(NR_OF_MEASURES);
-    avgTimeMul /= double(CLOCKS_PER_SEC);
+    storeTime(sumClocks, avgTimeMul);
 
-    sumTime = 0;
-    for (int i=0; i<NR_OF_MEASURES; i++) {
-        for (int j=0; j<VECTOR_SIZE; j++) {
-            start = clock();
-            divSIMD(j);
-            end = clock();
-            sumTime += double(end - start);
+    sumClocks = 0;
+    for (int i=0; i<REPS; i++) {
+        for(int j=0; j<SIZE; j++) {
+            sumClocks += div_SIMD(j);
         }
     }
-    avgTimeDiv = sumTime / double(NR_OF_MEASURES);
-    avgTimeDiv /= double(CLOCKS_PER_SEC);
+    storeTime(sumClocks, avgTimeDiv);
 }
 
-void addSISD(int i);
-void subSISD(int i);
-void mulSISD(int i);
-void divSISD(int i);
-
-void testSISD() {
-    time_t start, end;
-    double sumTime = 0;
-
-    for (int i=0; i<NR_OF_MEASURES; i++) {
-        for (int j=0; j<VECTOR_SIZE; j++) {
-            start = clock();
-            addSISD(j);
-            end = clock();
-            sumTime += double(end - start);
+void testSISD() {    
+    double sumClocks = 0;
+    for (int i=0; i<REPS; i++) {
+        for(int j=0; j<SIZE; j++) {
+            sumClocks += add_SISD(j);
         }
     }
-    avgTimeAdd = sumTime / double(NR_OF_MEASURES);
-    avgTimeAdd /= double(CLOCKS_PER_SEC);
-    
-    sumTime = 0;
-    for (int i=0; i<NR_OF_MEASURES; i++) {
-        for (int j=0; j<VECTOR_SIZE; j++) {
-            start = clock();
-            subSISD(j);
-            end = clock();
-            sumTime += double(end - start);
-        }
-    }
-    avgTimeSub = sumTime / double(NR_OF_MEASURES);
-    avgTimeSub /= double(CLOCKS_PER_SEC);
+    storeTime(sumClocks, avgTimeAdd);
 
-    sumTime = 0;
-    for (int i=0; i<NR_OF_MEASURES; i++) {
-        for (int j=0; j<VECTOR_SIZE; j++) {
-            start = clock();
-            mulSISD(j);
-            end = clock();
-            sumTime += double(end - start);
+    sumClocks = 0;
+    for (int i=0; i<REPS; i++) {
+        for(int j=0; j<SIZE; j++) {
+            sumClocks += sub_SISD(j);
         }
     }
-    avgTimeMul = sumTime / double(NR_OF_MEASURES);
-    avgTimeMul /= double(CLOCKS_PER_SEC);
+    storeTime(sumClocks, avgTimeSub);
 
-    sumTime = 0;
-    for (int i=0; i<NR_OF_MEASURES; i++) {
-        for (int j=0; j<VECTOR_SIZE; j++) {
-            start = clock();
-            divSISD(j);
-            end = clock();
-            sumTime += double(end - start);
+    sumClocks = 0;
+    for (int i=0; i<REPS; i++) {
+        for(int j=0; j<SIZE; j++) {
+            sumClocks += mul_SISD(j);
         }
     }
-    avgTimeDiv = sumTime / double(NR_OF_MEASURES);
-    avgTimeDiv /= double(CLOCKS_PER_SEC);
+    storeTime(sumClocks, avgTimeMul);
+
+    sumClocks = 0;
+    for (int i=0; i<REPS; i++) {
+        for(int j=0; j<SIZE; j++) {
+            sumClocks += div_SISD(j);
+        }
+    }
+    storeTime(sumClocks, avgTimeDiv);
+}
+
+
+/*//////////////////////////////
+            Assembly
+//////////////////////////////*/
+
+double add_SIMD(int i) {
+    start = clock();
+    asm(R"(
+        movaps %1, %%xmm0
+        movaps %2, %%xmm1
+        addps  %%xmm1, %%xmm0
+        movaps %%xmm0, %0
+    )"
+    :"=m" (Results[i]) // 0 -> output
+    :
+    "m" (Arr1[i]),       // 1 -> input
+    "m" (Arr2[i])        // 2 -> input
+    );
+    stop = clock();
+    return getClocks(start, stop);
+}
+
+double sub_SIMD(int i) {
+    start = clock();
+    asm(R"(
+        movaps %1, %%xmm0
+        movaps %2, %%xmm1
+        subps  %%xmm1, %%xmm0
+        movaps %%xmm0, %0
+    )"
+    :"=m" (Results[i]) // 0 -> output
+    :
+    "m" (Arr1[i]),       // 1 -> input
+    "m" (Arr2[i])        // 2 -> input
+    );
+    stop = clock();
+    return getClocks(start, stop);
+}
+
+double mul_SIMD(int i) {
+    start = clock();
+    asm(R"(
+        movaps %1, %%xmm0
+        movaps %2, %%xmm1
+        mulps  %%xmm1, %%xmm0
+        movaps %%xmm0, %0
+    )"
+    :"=m" (Results[i]) // 0 -> output
+    :
+    "m" (Arr1[i]),       // 1 -> input
+    "m" (Arr2[i])        // 2 -> input
+    );
+    stop = clock();
+    return getClocks(start, stop);
+}
+
+double div_SIMD(int i) {
+    start = clock();
+    asm(R"(
+        movaps %1, %%xmm0
+        movaps %2, %%xmm1
+        divps  %%xmm1, %%xmm0
+        movaps %%xmm0, %0
+    )"
+    :"=m" (Results[i]) // 0 -> output
+    :
+    "m" (Arr1[i]),       // 1 -> input
+    "m" (Arr2[i])        // 2 -> input
+    );
+    stop = clock();
+    return getClocks(start, stop);
+}
+
+double add_SISD(int i) {
+    start = clock();
+    asm(R"(
+        fld %4
+        fld %8
+        faddp
+        fstp %0
+
+        fld %5
+        fld %9
+        faddp
+        fstp %1
+
+        fld %6
+        fld %10
+        faddp
+        fstp %2
+
+        fld %7
+        fld %11
+        faddp
+        fst %3
+    )"
+    :  // outputs
+    "=m" (Results[i].a),    // 0
+    "=m" (Results[i].b),    // 1
+    "=m" (Results[i].c),    // 2
+    "=m" (Results[i].d)     // 3
+    :  // inputs
+    "g" (Arr1[i].a),        // 4
+    "g" (Arr1[i].b),        // 5
+    "g" (Arr1[i].c),        // 6
+    "g" (Arr1[i].d),        // 7
+    "g" (Arr2[i].a),        // 8
+    "g" (Arr2[i].b),        // 9
+    "g" (Arr2[i].c),        // 10
+    "g" (Arr2[i].d)         // 11
+    );
+    stop = clock();
+    return getClocks(start, stop);
+}
+
+double sub_SISD(int i) {
+    start = clock();
+    asm(R"(
+        fld %4
+        fld %8
+        fsubp
+        fstp %0
+
+        fld %5
+        fld %9
+        fsubp
+        fstp %1
+
+        fld %6
+        fld %10
+        fsubp
+        fstp %2
+
+        fld %7
+        fld %11
+        fsubp
+        fst %3
+    )"
+    :  // outputs
+    "=m" (Results[i].a),    // 0
+    "=m" (Results[i].b),    // 1
+    "=m" (Results[i].c),    // 2
+    "=m" (Results[i].d)     // 3
+    :  // inputs
+    "g" (Arr1[i].a),        // 4
+    "g" (Arr1[i].b),        // 5
+    "g" (Arr1[i].c),        // 6
+    "g" (Arr1[i].d),        // 7
+    "g" (Arr2[i].a),        // 8
+    "g" (Arr2[i].b),        // 9
+    "g" (Arr2[i].c),        // 10
+    "g" (Arr2[i].d)         // 11
+    );
+    stop = clock();
+    return getClocks(start, stop);
+}
+
+double mul_SISD(int i) {
+    start = clock();
+    asm(R"(
+        fld %4
+        fld %8
+        fmulp
+        fstp %0
+
+        fld %5
+        fld %9
+        fmulp
+        fstp %1
+
+        fld %6
+        fld %10
+        fmulp
+        fstp %2
+
+        fld %7
+        fld %11
+        fmulp
+        fst %3
+    )"
+    :  // outputs
+    "=m" (Results[i].a),    // 0
+    "=m" (Results[i].b),    // 1
+    "=m" (Results[i].c),    // 2
+    "=m" (Results[i].d)     // 3
+    :  // inputs
+    "g" (Arr1[i].a),        // 4
+    "g" (Arr1[i].b),        // 5
+    "g" (Arr1[i].c),        // 6
+    "g" (Arr1[i].d),        // 7
+    "g" (Arr2[i].a),        // 8
+    "g" (Arr2[i].b),        // 9
+    "g" (Arr2[i].c),        // 10
+    "g" (Arr2[i].d)         // 11
+    );
+    stop = clock();
+    return getClocks(start, stop);
+}
+
+double div_SISD(int i) {
+    start = clock();
+    asm(R"(
+        fld %4
+        fld %8
+        fdivp
+        fstp %0
+
+        fld %5
+        fld %9
+        fdivp
+        fstp %1
+
+        fld %6
+        fld %10
+        fdivp
+        fstp %2
+
+        fld %7
+        fld %11
+        fdivp
+        fst %3
+    )"
+    :  // outputs
+    "=m" (Results[i].a),    // 0
+    "=m" (Results[i].b),    // 1
+    "=m" (Results[i].c),    // 2
+    "=m" (Results[i].d)     // 3
+    :  // inputs
+    "g" (Arr1[i].a),        // 4
+    "g" (Arr1[i].b),        // 5
+    "g" (Arr1[i].c),        // 6
+    "g" (Arr1[i].d),        // 7
+    "g" (Arr2[i].a),        // 8
+    "g" (Arr2[i].b),        // 9
+    "g" (Arr2[i].c),        // 10
+    "g" (Arr2[i].d)         // 11
+    );
+    stop = clock();
+    return getClocks(start, stop);
+}
+
+
+/*//////////////////////////////
+            Utils
+//////////////////////////////*/
+
+void storeTime(double clocks, double& time) {
+    time = clocks / double(REPS);
+    time /= double(CLOCKS_PER_SEC);
+}
+
+float getRandom() {
+    return float(rand() / 100000);
+}
+
+void fillRandom() {
+    for (int i=0; i<SIZE; i++) {
+        Arr1[i].a = getRandom();
+        Arr1[i].b = getRandom();
+        Arr1[i].c = getRandom();
+        Arr1[i].d = getRandom();
+        Arr2[i].a = getRandom();
+        Arr2[i].b = getRandom();
+        Arr2[i].c = getRandom();
+        Arr2[i].d = getRandom();
+    }
+}
+
+double getClocks(time_t start, time_t stop) {
+    return double(stop - start);
 }
 
 void logResultsStream(ostream& stream, const string type) {
     stream << "Typ obliczen: " << type << "\n";
-    stream << "Liczba liczb: " << VECTOR_SIZE << "\n";
+    stream << "Liczba liczb: " << SIZE << "\n";
     stream << "Sredni czas: [s]:" << "\n";
     stream << "+ " << avgTimeAdd << "\n";
     stream << "- " << avgTimeSub << "\n";
@@ -197,7 +422,7 @@ void logResultsConsole(const string type) {
 
 void logResultsFile(const string type) {
     fstream file;
-    string filename = type + "_" + to_string(VECTOR_SIZE) + ".txt";
+    string filename = type + "_" + to_string(SIZE) + ".txt";
     file.open(filename, fstream::out);
     if(file.good()){
         logResultsStream(file, type);
@@ -212,180 +437,14 @@ void logResults(const string type) {
     logResultsFile(type);
 }
 
-/* ////////////////////////////////
-           Assembly 
-*/ ///////////////////////////////
-
-void addSIMD(int i) {
-    asm(R"(
-        movaps %1, %%xmm0
-        movaps %2, %%xmm1
-        addps %%xmm1, %%xmm0
-        movaps %%xmm0, %0
-    )"
-        :"=rm" (addResults[i])  // output
-        :"rm" (Arr1[i]),        // inputs
-        "rm" (Arr2[i]));
-}
-
-void subSIMD(int i) {
-    asm(R"(
-        movaps %1, %%xmm0
-        movaps %2, %%xmm1
-        subps %%xmm1, %%xmm0
-        movaps %%xmm0, %0
-    )"
-        :"=rm" (subResults[i])
-        :"rm" (Arr1[i]),
-        "rm" (Arr2[i]));
-}
-
-void mulSIMD(int i) {
-    asm(R"(
-        movaps %1, %%xmm0
-        movaps %2, %%xmm1
-        mulps %%xmm1, %%xmm0
-        movaps %%xmm0, %0
-    )"        
-        :"=rm" (mulResults[i])
-        :"rm" (Arr1[i]),
-        "rm" (Arr2[i]));
-}
-
-void divSIMD(int i) {
-    asm(R"(
-        movaps %1, %%xmm0
-        movaps %2, %%xmm1
-        subps %%xmm1, %%xmm0
-        movaps %%xmm0, %0
-    )" 
-        :"=rm" (divResults[i])
-        :"rm" (Arr1[i]),
-        "rm" (Arr2[i]));
-}
-
-void addSISD(int i) {
-    asm(R"(
-        fldl %4
-        faddl %5
-        fstpl %0
-        fldl %6
-        faddl %7
-        fstpl %1
-        fldl %8
-        faddl %9
-        fstpl %2
-        fldl %10
-        faddl %11
-        fstpl %3
-    )"
-        :
-        "=m" (addResults[i].a),
-        "=m" (addResults[i].b),
-        "=m" (addResults[i].c),
-        "=m" (addResults[i].d)
-        :
-        "g" (Arr1[i].a),
-        "g" (Arr2[i].a),
-        "g" (Arr1[i].b),
-        "g" (Arr2[i].b),
-        "g" (Arr1[i].c),
-        "g" (Arr2[i].c),
-        "g" (Arr1[i].d),
-        "g" (Arr2[i].d));
-}
-
-
-void subSISD(int i) {
-    asm(R"(
-        fldl %4
-        fsubl %5
-        fstpl %0
-        fldl %6
-        fsubl %7
-        fstpl %1
-        fldl %8
-        fsubl %9
-        fstpl %2
-        fldl %10
-        fsubl %11
-        fstpl %3
-    )"
-        :
-        "=m" (subResults[i].a),
-        "=m" (subResults[i].b),
-        "=m" (subResults[i].c),
-        "=m" (subResults[i].d)
-        :
-        "g" (Arr1[i].a),
-        "g" (Arr2[i].a),
-        "g" (Arr1[i].b),
-        "g" (Arr2[i].b),
-        "g" (Arr1[i].c),
-        "g" (Arr2[i].c),
-        "g" (Arr1[i].d),
-        "g" (Arr2[i].d));
-}
-
-void mulSISD(int i) {
-    asm(R"(
-        fldl %4
-        fmull %5
-        fstpl %0
-        fldl %6
-        fmull %7
-        fstpl %1
-        fldl %8
-        fmull %9
-        fstpl %2
-        fldl %10
-        fmull %11
-        fstpl %3
-    )"
-        :
-        "=m" (subResults[i].a),
-        "=m" (subResults[i].b),
-        "=m" (subResults[i].c),
-        "=m" (subResults[i].d)
-        :
-        "g" (Arr1[i].a),
-        "g" (Arr2[i].a),
-        "g" (Arr1[i].b),
-        "g" (Arr2[i].b),
-        "g" (Arr1[i].c),
-        "g" (Arr2[i].c),
-        "g" (Arr1[i].d),
-        "g" (Arr2[i].d));
-}
-
-
-void divSISD(int i) {
-    asm(R"(
-        fldl %4
-        fdivl %5
-        fstpl %0
-        fldl %6
-        fdivl %7
-        fstpl %1
-        fldl %8
-        fdivl %9
-        fstpl %2
-        fldl %10
-        fdivl %11
-        fstpl %3
-    )"
-        :
-        "=m" (divResults[i].a),
-        "=m" (divResults[i].b),
-        "=m" (divResults[i].c),
-        "=m" (divResults[i].d)
-        :
-        "g" (Arr1[i].a),
-        "g" (Arr2[i].a),
-        "g" (Arr1[i].b),
-        "g" (Arr2[i].b),
-        "g" (Arr1[i].c),
-        "g" (Arr2[i].c),
-        "g" (Arr1[i].d),
-        "g" (Arr2[i].d));
+string toString(Vector vector) {    
+    string text = "a: ";
+    text += to_string(vector.a);
+    text += " , b: ";
+    text += to_string(vector.b);
+    text += ", c: ";
+    text += to_string(vector.c);
+    text += ", d: ";
+    text += to_string(vector.d);
+    return  text;
 }

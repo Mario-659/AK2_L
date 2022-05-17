@@ -1,12 +1,10 @@
-all: Runnable
+all: runnable
 
-Runnable: main.cpp
-	g++ -Wall -m32 -o Runnable main.cpp
-
-clean:
-	rm Runnable Runnable_GDB
+runnable: main.cpp
+	g++ -Wall -m32 -O2 -o Runnable main.cpp
 
 debug:
-	rm Runnable_GDB
-	g++ -g -Wall -m32 -o Runnable_GDB main.cpp
-	gdb Runnable_GDB
+	rm RunnableDebug
+	g++ -Wall -g -m32 -o RunnableDebug main.cpp
+	./RunnableDebug
+	
